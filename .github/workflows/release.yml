@@ -1,0 +1,82 @@
+name: Build Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux-amd64:
+    name: Build Linux AMD64 Binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out slipstream-rust
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config libssl-dev python3
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build slipstream binaries (release with vendored OpenSSL)
+        run: |
+          cargo build --release \
+            -p slipstream-client \
+            -p slipstream-server \
+            --features openssl-vendored
+
+      - name: Strip binaries
+        run: |
+          strip target/release/slipstream-client
+          strip target/release/slipstream-server
+
+      - name: Create release directory
+        run: |
+          mkdir -p release
+          cp target/release/slipstream-client release/
+          cp target/release/slipstream-server release/
+          chmod +x release/slipstream-client release/slipstream-server
+
+      - name: Verify binaries
+        run: |
+          file release/slipstream-client
+          file release/slipstream-server
+          ldd release/slipstream-client || true
+          ldd release/slipstream-server || true
+          ls -lh release/
+
+      - name: Create tarball
+        run: |
+          cd release
+          tar czf ../slipstream-rust-linux-amd64.tar.gz slipstream-client slipstream-server
+          cd ..
+          sha256sum slipstream-rust-linux-amd64.tar.gz > slipstream-rust-linux-amd64.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: slipstream-rust-linux-amd64
+          path: |
+            release/slipstream-client
+            release/slipstream-server
+            slipstream-rust-linux-amd64.tar.gz
+            slipstream-rust-linux-amd64.tar.gz.sha256
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            slipstream-rust-linux-amd64.tar.gz
+            slipstream-rust-linux-amd64.tar.gz.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
