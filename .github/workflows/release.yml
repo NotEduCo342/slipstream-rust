@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-linux-amd64:
-    name: Build Linux AMD64 Binaries
+    name: Build Linux AMD64 Binaries (Static Musl)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -20,28 +20,33 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake pkg-config libssl-dev python3
+          sudo apt-get install -y cmake pkg-config python3 musl-tools
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
 
-      - name: Build slipstream binaries (release with vendored OpenSSL)
+      - name: Build slipstream binaries (static musl with vendored OpenSSL)
+        env:
+          CC: musl-gcc
         run: |
           cargo build --release \
             -p slipstream-client \
             -p slipstream-server \
+            --target x86_64-unknown-linux-musl \
             --features openssl-vendored
 
       - name: Strip binaries
         run: |
-          strip target/release/slipstream-client
-          strip target/release/slipstream-server
+          strip target/x86_64-unknown-linux-musl/release/slipstream-client
+          strip target/x86_64-unknown-linux-musl/release/slipstream-server
 
       - name: Create release directory
         run: |
           mkdir -p release
-          cp target/release/slipstream-client release/
-          cp target/release/slipstream-server release/
+          cp target/x86_64-unknown-linux-musl/release/slipstream-client release/
+          cp target/x86_64-unknown-linux-musl/release/slipstream-server release/
           chmod +x release/slipstream-client release/slipstream-server
 
       - name: Verify binaries

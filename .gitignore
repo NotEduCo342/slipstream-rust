@@ -10,3 +10,5 @@ __pycache__/
 # Rust workspace artifacts
 /target/
 **/*.rs.bk
+slipstream-rust-linux-amd64.zip
+slipstream-rust-linux-amd64/
