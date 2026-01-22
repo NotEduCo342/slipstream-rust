@@ -57,30 +57,60 @@ jobs:
           ldd release/slipstream-server || true
           ls -lh release/
 
-      - name: Create tarball
+      - name: Compress binaries separately with maximum compression
         run: |
           cd release
-          tar czf ../slipstream-rust-linux-amd64.tar.gz slipstream-client slipstream-server
+          # Use xz with maximum compression (level 9) for smallest size
+          xz -9 -k slipstream-client
+          xz -9 -k slipstream-server
+          # Also create a combined archive for convenience
+          tar -cJf ../slipstream-rust-linux-amd64.tar.xz slipstream-client slipstream-server
           cd ..
-          sha256sum slipstream-rust-linux-amd64.tar.gz > slipstream-rust-linux-amd64.tar.gz.sha256
+          
+      - name: Generate checksums
+        run: |
+          sha256sum release/slipstream-client.xz > slipstream-client.xz.sha256
+          sha256sum release/slipstream-server.xz > slipstream-server.xz.sha256
+          sha256sum slipstream-rust-linux-amd64.tar.xz > slipstream-rust-linux-amd64.tar.xz.sha256
 
-      - name: Upload artifacts
+      - name: Upload server binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: slipstream-rust-linux-amd64
+          name: slipstream-server-linux-amd64
           path: |
-            release/slipstream-client
-            release/slipstream-server
-            slipstream-rust-linux-amd64.tar.gz
-            slipstream-rust-linux-amd64.tar.gz.sha256
+            release/slipstream-server.xz
+            slipstream-server.xz.sha256
+          compression-level: 0
+
+      - name: Upload client binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slipstream-client-linux-amd64
+          path: |
+            release/slipstream-client.xz
+            slipstream-client.xz.sha256
+          compression-level: 0
+
+      - name: Upload combined archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: slipstream-rust-linux-amd64-combined
+          path: |
+            slipstream-rust-linux-amd64.tar.xz
+            slipstream-rust-linux-amd64.tar.xz.sha256
+          compression-level: 0
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            slipstream-rust-linux-amd64.tar.gz
-            slipstream-rust-linux-amd64.tar.gz.sha256
+            release/slipstream-client.xz
+            slipstream-client.xz.sha256
+            release/slipstream-server.xz
+            slipstream-server.xz.sha256
+            slipstream-rust-linux-amd64.tar.xz
+            slipstream-rust-linux-amd64.tar.xz.sha256
           draft: false
           prerelease: false
         env:
