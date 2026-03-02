@@ -1,0 +1,76 @@
+name: Release Linux amd64
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to upload assets to (for example, v1.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release-linux-amd64:
+    name: Build and upload Linux amd64 assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out slipstream-rust
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake pkg-config libssl-dev python3
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build slipstream-client
+        run: cargo build -p slipstream-client --release --target x86_64-unknown-linux-gnu
+
+      - name: Build slipstream-server
+        run: cargo build -p slipstream-server --release --target x86_64-unknown-linux-gnu
+
+      - name: Package release artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dist_dir="dist"
+          bin_dir="target/x86_64-unknown-linux-gnu/release"
+
+          mkdir -p "${dist_dir}"
+          cp "${bin_dir}/slipstream-client" "${dist_dir}/slipstream-client-linux-amd64"
+          cp "${bin_dir}/slipstream-server" "${dist_dir}/slipstream-server-linux-amd64"
+
+          tar -C "${dist_dir}" -czf "${dist_dir}/slipstream-client-linux-amd64.tar.gz" "slipstream-client-linux-amd64"
+          tar -C "${dist_dir}" -czf "${dist_dir}/slipstream-server-linux-amd64.tar.gz" "slipstream-server-linux-amd64"
+
+          (cd "${dist_dir}" && sha256sum \
+            slipstream-client-linux-amd64 \
+            slipstream-server-linux-amd64 \
+            slipstream-client-linux-amd64.tar.gz \
+            slipstream-server-linux-amd64.tar.gz \
+            > checksums-linux-amd64.sha256)
+
+      - name: Upload assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            dist/slipstream-client-linux-amd64
+            dist/slipstream-server-linux-amd64
+            dist/slipstream-client-linux-amd64.tar.gz
+            dist/slipstream-server-linux-amd64.tar.gz
+            dist/checksums-linux-amd64.sha256
+          fail_on_unmatched_files: true
+          overwrite_files: true
